@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 import database as db
 from database import init_db
 from config import BOT_CREDIT
+from bot_actions import ConvexActionWorker
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -92,6 +93,7 @@ class RestrictedCommandTree(app_commands.CommandTree):
 
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None, tree_cls=RestrictedCommandTree)
+action_worker_task = None
 
 STARTUP_COGS = [
     "cogs.moderation",
@@ -158,6 +160,7 @@ STARTUP_COGS = [
 
 @bot.event
 async def on_ready():
+    global action_worker_task
     await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.watching, name=f"the server | {BOT_CREDIT}")
     )
@@ -169,6 +172,8 @@ async def on_ready():
 
     log.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     log.info(BOT_CREDIT)
+    if action_worker_task is None or action_worker_task.done():
+        action_worker_task = asyncio.create_task(ConvexActionWorker(bot).run())
 
 
 async def main():
@@ -178,7 +183,6 @@ async def main():
         )
 
     await init_db()
-
     async with bot:
         for cog in STARTUP_COGS:
             try:
